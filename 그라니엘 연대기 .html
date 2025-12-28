@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>시우의공책RPG: 마법공방 & 상점</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap');
+        :root { --paper: #fdfdfd; --line: #d1e4f3; --ink: #222; --red: #d63031; --green: #00b894; --gold: #fdcb6e; --purple: #6c5ce7; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Gaegu', cursive; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #333; overflow: hidden; display: flex; justify-content: center; }
+
+        #app { width: 100%; max-width: 450px; height: 100%; background: var(--paper); background-image: linear-gradient(var(--line) 1.5px, transparent 1.5px), linear-gradient(90deg, var(--line) 1.5px, transparent 1.5px); background-size: 30px 30px; border-left: 20px solid #555; position: relative; display: flex; flex-direction: column; }
+        
+        .header { background: #000; color: #fff; height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; font-size: 18px; }
+        .header-sub { height: 45px; background: #222; color: #fff; display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #444; font-size: 13px; }
+
+        .content-area { flex: 1; position: relative; overflow-y: auto; padding-bottom: 20px; }
+        .panel { display: none; padding: 15px; }
+        .panel.active { display: block; }
+
+        /* 전투 UI */
+        .scene { position: relative; height: 200px; display: flex; justify-content: space-around; align-items: flex-end; padding-bottom: 20px; border-bottom: 2px dashed #999; margin-bottom: 10px; }
+        .unit-img { width: 80px; height: 80px; background: #fff; border: 2px solid #000; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 40px; position: relative; }
+        .hp-bar { width: 80px; height: 10px; border: 1px solid #000; background: #eee; margin-bottom: 5px; }
+        .hp-fill { height: 100%; background: var(--green); transition: 0.3s; }
+
+        /* 공용 카드 스타일 */
+        .item-card { border: 2px solid #000; padding: 10px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 8px; }
+        .item-card.selected { border-color: var(--purple); background: #f0ebff; box-shadow: 0 0 10px rgba(108, 92, 231, 0.3); }
+        .workshop-box { background: #eee; border: 2px dashed #666; padding: 15px; text-align: center; border-radius: 10px; margin-bottom: 15px; }
+        .enchant-tag { font-size: 11px; color: var(--purple); font-weight: bold; margin-right: 4px; }
+
+        /* 하단 컨트롤 */
+        .bottom-ui { background: #fff; border-top: 4px solid #000; padding: 10px; }
+        .action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 10px; }
+        .btn-act { padding: 8px; border: 2px solid #000; border-radius: 8px; font-size: 14px; cursor: pointer; background: #f9f9f9; }
+        .btn-act.selected { background: var(--gold); }
+        
+        #gauge-box { width: 100%; height: 40px; border: 3px solid #000; position: relative; border-radius: 8px; overflow: hidden; margin-bottom: 10px; background: #fff; }
+        .zone { position: absolute; height: 100%; top:0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; color: white; text-shadow: 1px 1px 0 #000;}
+        #needle { position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%); font-size: 22px; z-index: 10; }
+
+        .btn-main { width: 100%; padding: 12px; background: var(--ink); color: #fff; border: 4px solid #000; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
+        .menu-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 10px; }
+        .m-btn { border: 2px solid #000; border-radius: 8px; padding: 6px; text-align: center; cursor: pointer; background: #eee; font-size: 16px; }
+        
+        .shake { animation: shake 0.2s; }
+        @keyframes shake { 0%, 100% { transform:translateX(0); } 25% { transform:translateX(5px); } 75% { transform:translateX(-5px); } }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div class="header"><span>✖</span> <b>시우의공책RPG</b> <span id="fever-txt" style="color:var(--gold); display:none;">FEVER!!</span></div>
+    <div class="header-sub">
+        <span>⚔️ <b id="u-atk">25</b></span> <span>🛡️ <b id="u-def">5</b></span> <span>💰 <b id="u-gold">1000</b></span> <span>🚩 Stage <b id="u-stg">1</b></span>
+    </div>
+
+    <div class="content-area">
+        <div id="p-battle" class="panel active">
+            <div class="scene">
+                <div class="char-box"><div class="hp-bar"><div id="h-hp" class="hp-fill"></div></div><div class="unit-img">🛡️</div><b>계승자</b></div>
+                <div class="char-box"><div class="hp-bar"><div id="hp-e" class="hp-fill" style="background:var(--red)"></div></div><div id="mon-img" class="unit-img">👾</div><b id="e-name">몬스터</b></div>
+            </div>
+        </div>
+
+        <div id="p-shop" class="panel">
+            <h2 style="text-align:center;">🛒 필기구 상점</h2>
+            <div id="shop-list"></div>
+        </div>
+
+        <div id="p-inv" class="panel">
+            <h2 style="text-align:center;">🎒 가방</h2>
+            <div id="inv-list"></div>
+        </div>
+
+        <div id="p-fuse" class="panel">
+            <h2 style="text-align:center;">✨ 퓨즈 (장비 합성)</h2>
+            <div id="fuse-slots" class="workshop-box">장비 2개를 선택하세요</div>
+            <button class="btn-main" onclick="Game.doFuse()">합성하기</button>
+            <div id="fuse-list"></div>
+        </div>
+
+        <div id="p-alch" class="panel">
+            <h2 style="text-align:center;">🧪 연금술 (물약 연성)</h2>
+            <div id="alch-slots" class="workshop-box">물약 2개를 선택하세요</div>
+            <button class="btn-main" onclick="Game.doAlch()" style="background:var(--green)">연성하기</button>
+            <div id="alch-list"></div>
+        </div>
+
+        <div id="p-ench" class="panel">
+            <h2 style="text-align:center;">🔮 인챈트 공방</h2>
+            <div id="ench-target" class="workshop-box">부여할 장비를 선택하세요</div>
+            <button class="btn-main" onclick="Game.doEnchant()" style="background:var(--purple)">인챈트 부여 (500G)</button>
+            <div id="ench-list"></div>
+        </div>
+    </div>
+
+    <div class="bottom-ui">
+        <div class="action-grid">
+            <button class="btn-act" onclick="Game.selectMode('atk')">⚔️ 공격</button>
+            <button class="btn-act" onclick="Game.selectMode('eva')">🍃 회피</button>
+            <button class="btn-act" onclick="Game.selectMode('def')">🛡️ 방어</button>
+        </div>
+        <div id="gauge-box">
+            <div class="zone" style="width:30%; left:0; background:#ff4757;">MISS</div>
+            <div id="z-hit" class="zone" style="width:50%; left:30%; background:var(--green);">HIT</div>
+            <div class="zone" style="width:20%; left:80%; background:var(--gold);">CRIT</div>
+            <div id="needle">🖋️</div>
+        </div>
+        <button id="main-btn" class="btn-main" onclick="Game.execute()" disabled>액션 선택</button>
+        <div class="menu-grid">
+            <div class="m-btn" onclick="Game.tab('p-battle')">⚔️</div>
+            <div class="m-btn" onclick="Game.tab('p-shop')">🛒</div>
+            <div class="m-btn" onclick="Game.tab('p-inv')">🎒</div>
+            <div class="m-btn" onclick="Game.tab('p-fuse')">✨</div>
+            <div class="m-btn" onclick="Game.tab('p-ench')">🔮</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const Game = {
+        gold: 1500, atk: 25, def: 5, hp: 100, mhp: 100, ehp: 100, emhp: 100,
+        inv: [], stage: 1, pos: 0, dir: 1, speed: 3, isMoving: false, 
+        selectedMode: null, currentTab: 'p-battle', workshopSelection: [], currentEquip: null,
+
+        init() {
+            this.genShop();
+            this.spawn();
+            this.loop();
+            this.update();
+        },
+
+        // 상점 복구: 100개의 다양한 아이템 생성 로직
+        genShop() {
+            const list = document.getElementById('shop-list');
+            list.innerHTML = `<div class="item-card"><b>🍷 기초 체력 물약</b><button onclick="Game.buy('pot', 50, 300)">300G</button></div>`;
+            
+            const pre = ["날카로운", "전설의", "심연의", "고대", "빛나는", "녹슨", "우주", "그림자", "피의", "신성한"];
+            const mid = ["먹물", "샤프심", "잉크", "흑연", "깃털", "나무", "철제", "수정", "영혼", "은하"];
+            const suf = ["펜촉", "연필", "만년필", "지우개", "붓", "샤프"];
+
+            for(let i=1; i<=100; i++) {
+                const name = `${pre[i%10]} ${mid[(i+3)%10]}${suf[i%6]} Lv.${i}`;
+                const price = i * 400;
+                const power = i * 15;
+                list.innerHTML += `
+                    <div class="item-card">
+                        <div><b>${name}</b><br><small>공격력 +${power}</small></div>
+                        <button onclick="Game.buy('eq', ${power}, ${price}, '${name}')">${price}G</button>
+                    </div>`;
+            }
+        },
+
+        buy(type, val, price, name) {
+            if(this.gold < price) return alert("골드가 부족합니다!");
+            this.gold -= price;
+            if(type === 'pot') {
+                this.inv.push({ name: "체력 물약", type: "pot", val: val });
+            } else {
+                this.inv.push({ name: name, type: "eq", atk: val, enchants: [] });
+            }
+            alert("구매 완료!");
+            this.update();
+        },
+
+        // 탭 이동 및 리스트 렌더링
+        tab(id) {
+            this.currentTab = id;
+            this.workshopSelection = [];
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            
+            if(id === 'p-inv') this.renderList('inv-list', 'use');
+            if(id === 'p-fuse') this.renderList('fuse-list', 'fuse');
+            if(id === 'p-alch') this.renderList('alch-list', 'alch');
+            if(id === 'p-ench') this.renderList('ench-list', 'ench');
+        },
+
+        renderList(containerId, mode) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = "";
+            this.inv.forEach((item, i) => {
+                const isSelected = this.workshopSelection.includes(i);
+                const card = document.createElement('div');
+                card.className = `item-card ${isSelected ? 'selected' : ''}`;
+                
+                let info = item.type === 'eq' ? `(⚔️${item.atk})` : `(🍷${item.val})`;
+                let enchantTags = (item.enchants || []).map(e => `<span class="enchant-tag">[${e.name}]</span>`).join('');
+                
+                card.innerHTML = `<div>${item.name} ${info}<br>${enchantTags}</div>`;
+                card.onclick = () => this.handleSelect(i, mode);
+                container.appendChild(card);
+            });
+        },
+
+        handleSelect(i, mode) {
+            if(mode === 'use') {
+                this.useItem(i);
+            } else if(mode === 'ench') {
+                this.workshopSelection = [i];
+            } else {
+                const idx = this.workshopSelection.indexOf(i);
+                if(idx > -1) this.workshopSelection.splice(idx, 1);
+                else if(this.workshopSelection.length < 2) this.workshopSelection.push(i);
+            }
+            this.tab(this.currentTab);
+        },
+
+        // --- 공방 핵심 로직 ---
+        doEnchant() {
+            if(this.workshopSelection.length < 1) return alert("대상을 선택하세요.");
+            if(this.gold < 500) return alert("골드 부족 (500G 필요)");
+            
+            const item = this.inv[this.workshopSelection[0]];
+            if(item.type !== 'eq') return alert("장비에만 인챈트 가능!");
+
+            this.gold -= 500;
+            const effects = [
+                { name: "발화", type: "dot" }, { name: "흡혈", type: "heal" },
+                { name: "강타", type: "mul" }, { name: "신속", type: "speed" }
+            ];
+            const res = effects[Math.floor(Math.random() * effects.length)];
+            item.enchants.push(res);
+            item.name = res.name + "의 " + item.name;
+            alert(`[${res.name}] 인챈트 성공!`);
+            this.update();
+            this.tab('p-inv');
+        },
+
+        doFuse() {
+            if(this.workshopSelection.length < 2) return alert("재료 2개를 선택하세요.");
+            const [idx1, idx2] = this.workshopSelection;
+            const i1 = this.inv[idx1]; const i2 = this.inv[idx2];
+            if(i1.type !== 'eq' || i2.type !== 'eq') return alert("장비만 합성 가능!");
+
+            const newAtk = Math.max(i1.atk, i2.atk) + 20;
+            const combinedEnchants = [...i1.enchants, ...i2.enchants].slice(0, 3);
+            const newName = "⭐ 융합된 " + i1.name.split(" ").pop();
+
+            this.inv.splice(Math.max(idx1, idx2), 1);
+            this.inv.splice(Math.min(idx1, idx2), 1);
+            this.inv.push({ name: newName, type: 'eq', atk: newAtk, enchants: combinedEnchants });
+            alert("퓨즈 완료! 강력한 무기가 탄생했습니다.");
+            this.tab('p-inv');
+        },
+
+        doAlch() {
+            if(this.workshopSelection.length < 2) return alert("물약 2개를 선택하세요.");
+            const [idx1, idx2] = this.workshopSelection;
+            if(this.inv[idx1].type !== 'pot' || this.inv[idx2].type !== 'pot') return alert("물약만 연성 가능!");
+
+            const newVal = this.inv[idx1].val + this.inv[idx2].val + 30;
+            this.inv.splice(Math.max(idx1, idx2), 1);
+            this.inv.splice(Math.min(idx1, idx2), 1);
+            this.inv.push({ name: "🧪 고농축 물약", type: 'pot', val: newVal });
+            alert("연금술 성공!");
+            this.tab('p-inv');
+        },
+
+        useItem(i) {
+            const item = this.inv[i];
+            if(item.type === 'pot') {
+                this.hp = Math.min(this.mhp, this.hp + item.val);
+                this.inv.splice(i, 1);
+                alert("체력 회복!");
+            } else {
+                this.currentEquip = item;
+                this.atk = 25 + item.atk;
+                alert(`${item.name} 장착 완료!`);
+            }
+            this.update();
+            this.tab('p-battle');
+        },
+
+        // --- 전투 로직 ---
+        selectMode(m) {
+            this.selectedMode = m;
+            this.isMoving = true;
+            document.querySelectorAll('.btn-act').forEach(b => b.classList.remove('selected'));
+            event.target.classList.add('selected');
+            document.getElementById('main-btn').disabled = false;
+            document.getElementById('main-btn').innerText = "타이밍 맞춰 클릭!";
+        },
+
+        execute() {
+            if(!this.isMoving) return;
+            this.isMoving = false;
+            const p = this.pos;
+            let res = (p >= 80) ? "crit" : (p >= 30 && p <= 80) ? "hit" : "miss";
+
+            if(res !== "miss") {
+                let dmg = this.atk * (res === "crit" ? 2 : 1);
+                
+                // 인챈트 효과 발동
+                if(this.currentEquip && this.currentEquip.enchants) {
+                    this.currentEquip.enchants.forEach(e => {
+                        if(e.type === 'mul') dmg *= 1.5;
+                        if(e.type === 'heal') this.hp = Math.min(this.mhp, this.hp + 5);
+                        if(e.type === 'dot') {
+                            let dotCnt = 0;
+                            let dotInterval = setInterval(() => {
+                                this.ehp -= 10; this.update();
+                                if(++dotCnt >= 3 || this.ehp <= 0) clearInterval(dotInterval);
+                            }, 500);
+                        }
+                    });
+                }
+                
+                this.ehp -= Math.floor(dmg);
+                document.getElementById('e-unit').classList.add('shake');
+                setTimeout(()=>document.getElementById('e-unit').classList.remove('shake'), 200);
+                if(this.ehp <= 0) this.win();
+            } else {
+                this.enemyTurn();
+            }
+            this.resetTurn();
+            this.update();
+        },
+
+        enemyTurn() {
+            setTimeout(() => {
+                const dmg = 10 + (this.stage * 5);
+                this.hp -= dmg;
+                document.getElementById('h-unit').classList.add('shake');
+                if(this.hp <= 0) { alert("게임 오버!"); location.reload(); }
+                this.update();
+            }, 500);
+        },
+
+        win() {
+            this.gold += (this.stage * 200);
+            this.stage++;
+            alert(`승리! ${this.stage*200}G 획득`);
+            this.spawn();
+        },
+
+        spawn() {
+            this.emhp = this.ehp = 100 + (this.stage * 80);
+            this.update();
+        },
+
+        update() {
+            document.getElementById('u-gold').innerText = this.gold.toLocaleString();
+            document.getElementById('u-atk').innerText = this.atk;
+            document.getElementById('u-stg').innerText = this.stage;
+            document.getElementById('h-hp').style.width = (this.hp/this.mhp*100) + "%";
+            document.getElementById('hp-e').style.width = (this.ehp/this.emhp*100) + "%";
+        },
+
+        loop() {
+            if(this.isMoving) {
+                this.pos += this.speed * this.dir;
+                if(this.pos >= 100 || this.pos <= 0) this.dir *= -1;
+                document.getElementById('needle').style.left = this.pos + "%";
+            }
+            requestAnimationFrame(() => this.loop());
+        },
+
+        resetTurn() {
+            this.isMoving = false;
+            document.getElementById('main-btn').disabled = true;
+            document.getElementById('main-btn').innerText = "액션 선택";
+            document.querySelectorAll('.btn-act').forEach(b => b.classList.remove('selected'));
+        }
+    };
+
+    window.onload = () => Game.init();
+</script>
+</body>
+</html>
