@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>우주 개복치 RPG</title>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <style>
+    body { margin:0; padding:0; background:#111; color:#fff; font-family:sans-serif; overflow:hidden; }
+    #game { width:100vw; height:100vh; display:flex; flex-direction:column; }
+    canvas { background:#222; flex:1; }
+    #ui { height:180px; background:#0008; display:flex; align-items:center; justify-content:space-around; }
+    button { width:100px; height:100px; font-size:40px; border-radius:20px; background:#333; color:#fff; border:none; }
+    #attack { background:#c44; }
+    #loot { background:#cc4; display:none; }
+    #info { position:absolute; top:10px; left:10px; font-size:20px; }
+    #inventory { position:absolute; top:10px; right:10px; font-size:18px; max-width:50%; }
+    .overlay { position:absolute; inset:0; background:#000a; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:40px; }
+  </style>
+</head>
+<body>
+  <div id="game" hx-get="/state" hx-trigger="load, every 50ms" hx-swap="innerHTML">
+    <!-- 초기 로드 -->
+  </div>
+
+  <script>
+    let state = {
+      screen: "title",
+      continent: 0,
+      player: { x:50, y:50, hp:100, weapon:"검", dir:{up:false,down:false,left:false,right:false}, attacking:false },
+      monsters: [],
+      inventory: [],
+      continents: ["불타는 화산 대륙","얼어붙은 빙하 대륙","독안개 늪 대륙","번개 폭풍 평원","어둠의 숲 대륙",
+                   "사막의 미라 대륙","바다 속 심해 대륙","구름 위 천공 대륙","기계 도시 대륙","마법 결계 대륙",
+                   "용암 강 대륙","독초 정글 대륙","눈보라 산맥","별똥별 운석 대륙","시간 왜곡 대륙",
+                   "꿈의 환상 대륙","죽음의 무덤 대륙","빛의 성역 대륙","혼돈의 균열 대륙","우주 개복치 대륙"]
+    };
+
+    const grades = ["좆됨","쓰레기","일반","레어","에픽","전설","신화","우주"];
+    const prefixes = ["강력한","빛나는","어두운","고대의","저주받은","신성한","파괴적인","행운의","마법의","우주의"];
+    const items = ["검","활","방패","갑옷","반지","목걸이","장갑","부츠","포션","마법서"];
+
+    function randItem() {
+      const grade = grades[Math.floor(Math.random()*grades.length)];
+      const name = prefixes[Math.floor(Math.random()*prefixes.length)] + " " + items[Math.floor(Math.random()*items.length)];
+      const power = {좆됨:1,쓰레기:5,일반:20,레어:50,에픽:100,전설:200,신화:500,우주:9999}[grade];
+      return {name, grade, power};
+    }
+
+    function spawnMonsters() {
+      state.monsters = [];
+      const cnt = state.continent === 19 ? 1 : 5;
+      for(let i=0; i<cnt; i++){
+        let type = "검사";
+        const c = state.continents[state.continent];
+        if(c.includes("화산")||c.includes("용암")) type="자폭병";
+        else if(c.includes("빙하")||c.includes("눈보라")) type="검사";
+        else if(c.includes("숲")||c.includes("정글")) type="궁수";
+        else if(c.includes("마법")||c.includes("환상")) type="마녀";
+        if(state.continent===19) type="보스";
+        state.monsters.push({x:Math.random()*80+10, y:Math.random()*50+10, type, hp:30});
+      }
+    }
+
+    function startGame(weapon) {
+      state.screen = "game";
+      state.player.weapon = weapon;
+      state.player.x = 50; state.player.y = 40;
+      state.player.hp = 100;
+      state.continent = 0;
+      state.inventory = [];
+      spawnMonsters();
+    }
+
+    function updateGame() {
+      const p = state.player;
+      if(p.dir.up) p.y -= 0.5;
+      if(p.dir.down) p.y += 0.5;
+      if(p.dir.left) p.x -= 0.5;
+      if(p.dir.right) p.x += 0.5;
+      p.x = Math.max(5, Math.min(95, p.x));
+      p.y = Math.max(5, Math.min(80, p.y));
+
+      state.monsters.forEach(m => {
+        const dx = p.x - m.x, dy = p.y - m.y;
+        const dist = Math.hypot(dx,dy);
+        if(dist > 5) { m.x += dx/dist*0.3; m.y += dy/dist*0.3; }
+        if(m.type==="자폭병" && dist<8) { p.hp -= 35; m.hp = 0; }
+        if(dist < (p.weapon==="검"?10:20) && p.attacking) m.hp -= 10;
+        if(dist < 12) p.hp -= {자폭병:20,궁수:8,검사:12,마녀:15,보스:30}[m.type]||10;
+      });
+      state.monsters = state.monsters.filter(m => m.hp > 0);
+
+      if(state.monsters.length===0) {
+        if(state.continent===0) state.screen = "shop";
+        else {
+          state.continent++;
+          if(state.continent>=20) state.screen = "win";
+          else spawnMonsters();
+        }
+      }
+      if(p.hp <= 0) state.screen = "over";
+    }
+
+    setInterval(() => {
+      if(state.screen==="game") updateGame();
+      document.getElementById('game').innerHTML = render();
+    }, 50);
+
+    function render() {
+      if(state.screen==="title")
+        return `<div class="overlay"><div>우주 개복치 RPG</div><button hx-post="/title" hx-vals='{}'>시작</button></div>`;
+
+      if(state.screen==="select")
+        return `<div class="overlay">
+          <div>무기 선택</div>
+          <button onclick="startGame('검')">검</button>
+          <button onclick="startGame('활')">활</button>
+        </div>`;
+
+      if(state.screen==="shop")
+        return `<div class="overlay"><div>상점 오픈!<br>상자 버튼으로 아이템 뽑기</div></div>`;
+
+      if(state.screen==="loot") {
+        const item = state.inventory[state.inventory.length-1];
+        return `<div class="overlay" style="color:${item.grade==='우주'?'cyan':''}">
+          <div>\( {item.grade} 등급!</div><div> \){item.name} (+${item.power})</div>
+          <button onclick="state.screen='game'">계속</button>
+        </div>`;
+      }
+
+      if(state.screen==="win")
+        return `<div class="overlay"><div>모든 대륙 클리어!<br>우주 개복치가 되었다!</div></div>`;
+
+      if(state.screen==="over")
+        return `<div class="overlay"><div>게임 오버</div><button onclick="state.screen='title'">다시 시작</button></div>`;
+
+      // game
+      return `
+        <canvas id="canvas" width="1280" height="720"></canvas>
+        <div id="info">대륙: ${state.continents[state.continent]}<br>HP: ${state.player.hp}</div>
+        <div id="inventory">\( {state.inventory.slice(-6).reverse().map(i=>`<div style="color: \){i.grade==='우주'?'cyan':''}">${i.grade} ${i.name}</div>`).join('')}</div>
+        <div id="ui">
+          <button onclick="state.player.dir.left=true" ontouchstart="state.player.dir.left=true" ontouchend="state.player.dir.left=false" onmouseup="state.player.dir.left=false">←</button>
+          <div>
+            <button onclick="state.player.dir.up=true" ontouchstart="state.player.dir.up=true" ontouchend="state.player.dir.up=false" onmouseup="state.player.dir.up=false">↑</button><br>
+            <button onclick="state.player.dir.down=true" ontouchstart="state.player.dir.down=true" ontouchend="state.player.dir.down=false" onmouseup="state.player.dir.down=false">↓</button>
+          </div>
+          <button onclick="state.player.dir.right=true" ontouchstart="state.player.dir.right=true" ontouchend="state.player.dir.right=false" onmouseup="state.player.dir.right=false">→</button>
+          <button id="attack" onclick="state.player.attacking=true" ontouchstart="state.player.attacking=true" ontouchend="state.player.attacking=false" onmouseup="state.player.attacking=false">공격</button>
+          <button id="loot" style="display:${state.continent>=1?'block':'none'}" onclick="state.inventory.push(randItem()); state.screen='loot'">상자</button>
+        </div>
+        <script>
+          const c = document.getElementById('canvas');
+          const ctx = c.getContext('2d');
+          ctx.clearRect(0,0,1280,720);
+          // player
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.moveTo(\( {state.player.x*12.8}, \){state.player.y*9}); ctx.lineTo(\( {state.player.x*12.8+40}, \){state.player.y*9-30}); ctx.lineTo(\( {state.player.x*12.8+80}, \){state.player.y*9}); ctx.lineTo(\( {state.player.x*12.8+40}, \){state.player.y*9+30}); ctx.closePath(); ctx.fill();
+          // monsters
+          ${state.monsters.map(m=>`
+            ctx.fillStyle = '${m.type==="자폭병"?"red":m.type==="궁수"?"green":m.type==="검사"?"blue":m.type==="마녀"?"magenta":"orange"}';
+            ctx.beginPath(); ctx.moveTo(\( {m.x*12.8}, \){m.y*9}); ctx.lineTo(\( {m.x*12.8+35}, \){m.y*9-25}); ctx.lineTo(\( {m.x*12.8+70}, \){m.y*9}); ctx.lineTo(\( {m.x*12.8+35}, \){m.y*9+25}); ctx.closePath(); ctx.fill();
+          `).join('')}
+        </script>
+      `;
+    }
+
+    // 초기
+    document.getElementById('game').innerHTML = render();
+  </script>
+</body>
+</html>
